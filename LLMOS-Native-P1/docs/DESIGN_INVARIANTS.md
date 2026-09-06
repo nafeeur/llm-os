@@ -23,8 +23,8 @@ the native system.
 8. **No Python or framework runtime is required to boot or infer.** Native
    model execution is freestanding and statically controlled.
 9. **Hardware differences stop at the platform and operator layers.** Model,
-   context, scheduler, capability, agent and transaction logic is shared across
-   x86-64 and AArch64.
+   context, scheduler, capability, agent and transaction logic must not depend
+   on the target architecture, even while the only shipped target is x86-64.
 10. **Performance claims require measurement.** Deterministic test generation
     is never described as a trained language model, and structural validation
     is never described as a hardware boot test.

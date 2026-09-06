@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Boot an LLMOS image in QEMU and verify its serial self-test."""
+"""Boot the x86-64 LLMOS image in QEMU and verify its serial self-test."""
 from __future__ import annotations
 
 import argparse
@@ -12,35 +12,26 @@ import time
 from pathlib import Path
 
 
-def command_for(root: Path, target: str) -> list[str]:
-    if target == "x86":
-        qemu = os.environ.get("QEMU_X86_64") or shutil.which("qemu-system-x86_64")
-        if not qemu:
-            raise FileNotFoundError("qemu-system-x86_64 not found")
-        return [
-            qemu, "-machine", "pc", "-m", "128M", "-smp", "1",
-            "-drive", f"format=raw,file={root / 'build/x86_64/llmos-x86_64.img'}",
-            "-display", "none", "-serial", "stdio", "-monitor", "none",
-            "-no-reboot", "-no-shutdown",
-        ]
-    qemu = os.environ.get("QEMU_AARCH64") or shutil.which("qemu-system-aarch64")
+def command_for(root: Path) -> list[str]:
+    qemu = os.environ.get("QEMU_X86_64") or shutil.which("qemu-system-x86_64")
     if not qemu:
-        raise FileNotFoundError("qemu-system-aarch64 not found")
+        raise FileNotFoundError("qemu-system-x86_64 not found")
     return [
-        qemu, "-machine", "virt", "-cpu", "cortex-a72", "-m", "256M", "-smp", "1",
-        "-kernel", str(root / "build/aarch64-qemu/llmos-aarch64-qemu.bin"),
-        "-nographic", "-monitor", "none", "-no-reboot", "-no-shutdown",
+        qemu, "-machine", "pc", "-m", "128M", "-smp", "1",
+        "-drive", f"format=raw,file={root / 'build/x86_64/llmos-x86_64.img'}",
+        "-display", "none", "-serial", "stdio", "-monitor", "none",
+        "-no-reboot", "-no-shutdown",
     ]
 
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("target", choices=("x86", "arm64"))
+    parser.add_argument("target", choices=("x86",))
     parser.add_argument("--timeout", type=float, default=12.0)
     args = parser.parse_args()
     root = Path(__file__).resolve().parent.parent
     try:
-        cmd = command_for(root, args.target)
+        cmd = command_for(root)
     except FileNotFoundError as exc:
         print(f"SKIP: {exc}", file=sys.stderr)
         return 2
@@ -67,7 +58,7 @@ def main() -> int:
                     proc.stdin.write(b"selftest\nhalt\n")
                     proc.stdin.flush()
                     sent = True
-                if "selftest: 7/7 passed" in text:
+                if "selftest: 13/13 passed" in text:
                     print(text)
                     print(f"{args.target} VM smoke: PASS")
                     return 0

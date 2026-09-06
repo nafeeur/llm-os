@@ -4,8 +4,10 @@ The ordering is intentional. Framework integrations and a desktop are excluded.
 
 ## P1 — portable model-centric foundation (this release)
 
-- freestanding x86-64 and AArch64 builds;
-- QEMU images and a Raspberry Pi 4 image;
+- freestanding x86-64 build (AArch64 QEMU and Raspberry Pi 4 builds existed
+  in an earlier revision and were dropped to concentrate validation effort
+  on one architecture; the core stays architecture-neutral so re-adding a
+  port is a platform-layer exercise, not a rewrite);
 - architecture-neutral model, tensor, context, scheduler and agent code;
 - immutable shared weight pages;
 - paged copy-on-write KV state;
@@ -15,17 +17,23 @@ The ordering is intentional. Framework integrations and a desktop are excluded.
 
 ## P2 — first real in-guest language model
 
-- VirtIO block driver on QEMU and SD/eMMC block path for Pi;
-- LMOF package parser and content-hash validation;
-- byte/BPE tokenizer object;
-- RMSNorm, RoPE, grouped-query attention, SwiGLU and sampling operators;
-- scalar reference operators plus x86 AVX2 and Arm NEON kernels;
-- a small openly licensed quantized decoder model included as a test package;
-- measured tokens/second, time to first token and bytes moved per token;
-- persistent model and prefix objects.
+- VirtIO block driver on QEMU (done for x86-64; SD/eMMC and other-board
+  block paths are future platform-layer work);
+- LMOF package parser and content-hash validation (done);
+- byte tokenizer (done; BPE merge table is a later increment);
+- RMSNorm, RoPE, grouped-query attention, SwiGLU and sampling operators in
+  Q16.16 fixed point (done, scalar reference only);
+- x86 AVX2 packed kernels (not started; the build currently disables
+  SSE/AVX entirely to avoid FPU state complexity without preemption);
+- a small deterministic, seeded-random int8 test package (done; not a
+  trained model — see `scripts/make_test_model.py`);
+- measured tokens/second, time to first token and bytes moved per token
+  (not started);
+- persistent model and prefix objects (not started).
 
-P2 is complete only when both x86-64 QEMU and Arm64 QEMU generate text without
-Linux, Ollama, Python, a host bridge or a network service.
+P2 is complete only when x86-64 QEMU generates text without Linux, Ollama,
+Python, a host bridge or a network service — which the `infer2` command
+already does end to end, with the caveats above on what's still missing.
 
 ## P3 — real capability microkernel and multicore execution
 

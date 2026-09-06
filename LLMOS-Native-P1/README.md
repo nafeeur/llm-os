@@ -12,11 +12,10 @@ It is deliberately **not**:
 - a POSIX-compatible general-purpose OS;
 - a desktop automation layer.
 
-The same architecture-neutral C core currently builds into:
-
-- `build/x86_64/llmos-x86_64.img` — x86-64 BIOS/QEMU disk image;
-- `build/aarch64-qemu/llmos-aarch64-qemu.bin` — Arm64 QEMU `virt` image;
-- `build/rpi4/llmos-rpi4.img` — Raspberry Pi 4 / BCM2711 direct kernel image.
+The C core currently builds into `build/x86_64/llmos-x86_64.img` — an x86-64
+BIOS/QEMU disk image. (An earlier revision also targeted AArch64 QEMU and
+Raspberry Pi 4; that work is on hold in favor of finishing one architecture
+first — see `docs/ROADMAP.md`.)
 
 ## What P1 demonstrates
 
@@ -32,11 +31,27 @@ The same architecture-neutral C core currently builds into:
 - Transactional workspace writes with verify/commit/rollback behavior.
 - A bounded audit journal.
 - A native integer tensor microbenchmark.
-- One common model/agent core across x86-64 and AArch64.
 
 `NativeLM-test` is a deterministic operator and scheduler test backend. It is
-not represented as a trained model. Loading and executing a real quantized
-transformer is the P2 boundary.
+not represented as a trained model.
+
+## What the P2 slice adds
+
+- A legacy VirtIO block driver (PCI, legacy/transitional device 0x1af4:0x1001)
+  with its own shared virtqueue implementation.
+- LMOF (`docs/MODEL_FORMAT.md`): a SHA-256-content-hash-validated model
+  package format — header, tensor directory, per-tensor quantization scale.
+- A byte-level tokenizer.
+- Q16.16 fixed-point RMSNorm, RoPE, grouped-query attention, SwiGLU and
+  sampling kernels (the kernel build disables x87/SSE entirely, so there is
+  no runtime float available).
+- `blk` / `modelload` / `infer2` shell commands that load a package over the
+  block device and run a genuine forward pass against it.
+
+The test package (`scripts/make_test_model.py`) is seeded-random int8
+weights, not a trained checkpoint — the point is exercising a real format,
+real hash validation and real fixed-point transformer math end to end, not
+producing meaningful text.
 
 ## Build
 
@@ -52,10 +67,10 @@ Required tools:
 make test
 ```
 
-This builds all three targets, validates the image structures, runs seven host
+This builds the x86-64 target, validates the image structure, runs the host
 integration tests, and runs AddressSanitizer plus UndefinedBehaviorSanitizer.
 
-## Run x86-64 in QEMU
+## Run in QEMU
 
 ```bash
 make x86
@@ -71,27 +86,17 @@ qemu-system-x86_64 \
   -display none -serial stdio -monitor none -no-reboot
 ```
 
-## Run Arm64 in QEMU
+To also exercise the P2 slice, generate the test model package and attach it
+as a second (VirtIO) drive — `scripts/run-x86.sh` does this automatically
+whenever `build/models/nativelm2-test.lmof` exists:
 
 ```bash
-make arm64
-./scripts/run-arm64.sh
+python3 scripts/make_test_model.py
+make x86
+./scripts/run-x86.sh
 ```
 
-Equivalent command:
-
-```bash
-qemu-system-aarch64 \
-  -machine virt -cpu cortex-a72 -m 256M -smp 1 \
-  -kernel build/aarch64-qemu/llmos-aarch64-qemu.bin \
-  -nographic -monitor none -no-reboot
-```
-
-## Run on Raspberry Pi 4
-
-See `pi4/README.txt`. The P1 Pi image uses the PL011 UART and needs a 3.3 V
-serial adapter at 115200 8N1. It is a BCM2711-specific platform target; it is
-not a Raspberry Pi 5 image.
+Then at the `llmos>` prompt: `blk`, `modelload`, `infer2 hello`.
 
 ## Commands
 
@@ -115,6 +120,9 @@ cat alpha.txt
 agent fail 4 attempt an unauthorized power action
 journal
 tensorbench
+blk
+modelload
+infer2 hello
 selftest
 halt
 ```
@@ -126,23 +134,25 @@ and the entire job is rolled back.
 ## Source layout
 
 ```text
-arch/x86_64/           x86 boot, serial and linker definition
-arch/aarch64/          Arm64 entry, QEMU/Pi platforms and link definitions
-include/llmos/         architecture-neutral contracts
+arch/x86_64/           x86 boot, serial, PCI/VirtIO discovery and linker definition
+include/llmos/         architecture-neutral contracts and generated fixed-point tables
 src/runtime.c          freestanding runtime and serial console formatting
 src/core.c             model, tensor, context, scheduler and agent executive
+src/sha256.c           freestanding SHA-256
+src/lmof.c             LMOF model package parser
+src/tokenizer.c         byte-level tokenizer
+src/ops.c              Q16.16 fixed-point tensor operators
+src/virtio_blk.c       shared legacy VirtIO virtqueue driver
 tests/                 host platform and integration test entry point
-pi4/                   Raspberry Pi 4 boot configuration
-scripts/               QEMU launchers
-docs/                   architecture, portability, model format and roadmap
+scripts/               QEMU launcher, table generator, test model packager
+docs/                   architecture, model format and roadmap
 ```
 
 ## Design boundary
 
 P1 is a bare-metal vertical slice, not yet a production microkernel. The model
 executive, agent executive and kernel mechanisms currently share one privileged
-address space. P2/P3 must add page-table-separated services, true capability
-handles, interrupt-driven I/O, SMP, persistent model storage, tokenizer support
-and a real transformer backend.
+address space. Later phases must add page-table-separated services, true
+capability handles, interrupt-driven I/O, SMP, and a real trained model.
 
 Read `docs/ARCHITECTURE.md` and `docs/ROADMAP.md` before extending the system.
