@@ -1,1 +1,1 @@
-LLMOS Native P1 is a from-scratch, bare-metal operating system research project whose sole purpose is running local LLM inference and multi-agent execution directly on hardware — no Linux, no Python, no Ollama/vLLM wrapper underneath.
+LLMOS Native P1 is a from-scratch, bare-metal operating system research project whose sole purpose is running local LLM inference and multi-agent execution directly on hardware. No Linux, no Python, no Ollama/vLLM wrapper underneath.
