@@ -1,0 +1,5 @@
+arm_64bit=1
+kernel=llmos-rpi4.img
+enable_uart=1
+dtoverlay=disable-bt
+core_freq=500
